@@ -1,0 +1,36 @@
+@'
+# Frontend (Quasar / Node)
+front_code/node_modules/
+front_code/dist/
+front_code/.quasar/
+front_code/.env
+front_code/.env.local
+front_code/package-lock.json
+front_code/yarn.lock
+
+# Backend (Python)
+server_code/venv/
+server_code/.venv/
+server_code/__pycache__/
+server_code/*.pyc
+server_code/.env
+server_code/*.db
+
+# Uploads / runtime
+uploads/
+front_code/public/
+server_code/uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Optional caches
+.pytest_cache/
+.mypy_cache/
+'@ | Out-File -FilePath .gitignore -Encoding UTF8
