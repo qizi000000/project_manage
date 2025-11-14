@@ -1,14 +1,13 @@
 @'
-# Frontend (Quasar / Node)
+# 环境依赖 (Quasar / Node)
 front_code/node_modules/
 front_code/dist/
 front_code/.quasar/
 front_code/.env
 front_code/.env.local
-front_code/package-lock.json
-front_code/yarn.lock
 
-# Backend (Python)
+
+# Python 环境
 server_code/venv/
 server_code/.venv/
 server_code/__pycache__/
@@ -16,10 +15,10 @@ server_code/*.pyc
 server_code/.env
 server_code/*.db
 
-# Uploads / runtime
+# 上传文件夹
 uploads/
 front_code/public/
-server_code/uploads/
+# server_code/uploads/
 
 # IDE / OS
 .vscode/
@@ -30,7 +29,7 @@ Thumbs.db
 # Logs
 *.log
 
-# Optional caches
+# 
 .pytest_cache/
 .mypy_cache/
 '@ | Out-File -FilePath .gitignore -Encoding UTF8

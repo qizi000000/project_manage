@@ -15,9 +15,14 @@ const routes = [
       { path: '', name: 'home', component: () => import('pages/IndexPage.vue') },
       // 项目管理
       { path: 'projects', name: 'projects-list', component: () => import('pages/projects/ProjectsList.vue'), meta: { permissions: ['projects.view'] } },
+      //文件管理
       { path: 'projects/files', name: 'projects-files', component: () => import('pages/projects/ProjectFiles.vue'), meta: { permissions: ['projects.view'] } },
+      
+      // 甘特图
       { path: 'projects/gantt', name: 'projects-gantt', component: () => import('pages/projects/ProjectGantt.vue'), meta: { permissions: ['projects.view'] } },
+      // 里程碑
       { path: 'projects/milestones', name: 'projects-milestones', component: () => import('pages/projects/ProjectMilestones.vue'), meta: { permissions: ['projects.view'] } },
+      // 统计分析
       { path: 'projects/analytics', name: 'projects-analytics', component: () => import('pages/projects/ProjectAnalytics.vue'), meta: { permissions: ['projects.view'] } },
       
       {

@@ -8,10 +8,13 @@
 
     <q-tabs v-model="tab" class="text-grey-8" align="left">
       <q-tab name="details" label="详情" />
-      <q-tab name="gantt" label="甘特图" />
-      <q-tab name="members" label="成员" />
       <q-tab name="files" label="文件" />
-      <q-tab name="settings" label="设置" />
+      <q-tab name="gantt" label="甘特图" />
+      <q-tab name="milestones" label="里程碑" />
+      <q-tab name="analytics" label="统计分析" />
+
+
+
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated swipeable vertical class="q-mt-md">
