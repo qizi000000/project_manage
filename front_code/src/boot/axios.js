@@ -15,6 +15,11 @@ function connectWS(router){
   const token = localStorage.getItem('token')
   if (!token) return
   try {
+    // 避免重复创建连接：如果已有连接正在打开或已打开，则直接返回
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return
+    }
+
     const url = `${wsURL}?token=${encodeURIComponent(token)}`
     ws = new WebSocket(url)
     ws.onopen = () => {
@@ -27,14 +32,19 @@ function connectWS(router){
       }, 5000)
     }
     ws.onclose = () => {
+      // 清理当前心跳计时器
       clearInterval(wsTimer)
       wsTimer = null
-      ws = null
-      // 简单重连，避免登录页反复重连
-      const name = router.currentRoute.value.name
-      
-        setTimeout(() => connectWS(router), 5000)
-      
+      // 清理当前 ws 引用（如果已经关闭）
+      try { ws = null } catch (e) {
+        console.error('WebSocket 清理失败', e)
+      }
+      // 简单重连：仅当仍有 token 且不在登录页时重连，避免在登录页/无 token 时反复重连
+      setTimeout(() => {
+        if (localStorage.getItem('token') && router.currentRoute.value.name !== 'login') {
+          connectWS(router)
+        }
+      }, 5000)
     }
     ws.onerror = () => {
       // 错误由 onclose 统一处理重连
