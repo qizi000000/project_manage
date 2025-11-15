@@ -48,6 +48,7 @@ def to_task_out(t: Task) -> TaskOut:
         created_by_name=t.creator.nickname or t.creator.username if t.creator else None,
         created_at=t.created_at,
         updated_at=t.updated_at,
+        start_date=t.start_date,
         estimated_days=t.estimated_days,
         due_date=t.due_date,
     )
@@ -188,6 +189,7 @@ async def create_task(
         priority=payload.priority,
         project_id=payload.project_id,
         created_by=current_user.id,
+        start_date=payload.start_date,
         estimated_days=payload.estimated_days,
         due_date=due_date,
     )
@@ -296,6 +298,8 @@ async def update_task(
         task.status = payload.status
     if payload.priority is not None:
         task.priority = payload.priority
+    if payload.start_date is not None:
+        task.start_date = payload.start_date
     if payload.estimated_days is not None:
         task.estimated_days = payload.estimated_days
         # 重新计算截止日期

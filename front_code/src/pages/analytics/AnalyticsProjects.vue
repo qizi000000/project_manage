@@ -26,6 +26,67 @@
     </div>
 
     <div class="row q-col-gutter-md q-mb-md">
+      <!-- 项目概览统计 -->
+      <div class="col-12">
+        <q-card flat bordered>
+          <q-card-section>
+            <div class="text-subtitle1 q-mb-md">项目概览</div>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-card flat class="bg-primary-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h4 text-primary">{{ analyticsData.summary?.total_projects || 0 }}</div>
+                    <div class="text-caption">总项目数</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-card flat class="bg-positive-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h4 text-positive">{{ analyticsData.summary?.completed_projects || 0 }}</div>
+                    <div class="text-caption">已完成</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-card flat class="bg-warning-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h4 text-warning">{{ analyticsData.summary?.overdue_projects || 0 }}</div>
+                    <div class="text-caption">逾期项目</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-card flat class="bg-info-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h4 text-info">{{ analyticsData.summary?.active_projects || 0 }}</div>
+                    <div class="text-caption">活跃项目</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+            </div>
+            <div class="row q-col-gutter-md q-mt-md">
+              <div class="col-12 col-md-6">
+                <q-card flat class="bg-secondary-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h5 text-secondary">{{ analyticsData.summary?.completion_rate || 0 }}%</div>
+                    <div class="text-caption">完成率</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+              <div class="col-12 col-md-6">
+                <q-card flat class="bg-accent-1">
+                  <q-card-section class="text-center">
+                    <div class="text-h5 text-accent">{{ analyticsData.summary?.avg_duration_days || 0 }}天</div>
+                    <div class="text-caption">平均工期</div>
+                  </q-card-section>
+                </q-card>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+
       <!-- 项目状态分布 -->
       <div class="col-12 col-md-6">
         <q-card flat bordered>
@@ -51,15 +112,31 @@
       </div>
     </div>
 
-    <!-- 项目创建趋势 -->
-    <q-card flat bordered>
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-md">项目创建趋势</div>
-        <div class="chart-container">
-          <canvas ref="trendChart"></canvas>
-        </div>
-      </q-card-section>
-    </q-card>
+    <div class="row q-col-gutter-md q-mb-md">
+      <!-- 项目团队分布 -->
+      <div class="col-12 col-md-6">
+        <q-card flat bordered>
+          <q-card-section>
+            <div class="text-subtitle1 q-mb-md">项目团队分布</div>
+            <div class="chart-container">
+              <canvas ref="teamChart"></canvas>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <!-- 项目创建趋势 -->
+      <div class="col-12 col-md-6">
+        <q-card flat bordered>
+          <q-card-section>
+            <div class="text-subtitle1 q-mb-md">项目创建趋势</div>
+            <div class="chart-container">
+              <canvas ref="trendChart"></canvas>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
   </q-page>
 </template>
 
@@ -76,6 +153,7 @@ const authStore = useAuthStore()
 // 图表引用
 const statusChart = ref(null)
 const ownerChart = ref(null)
+const teamChart = ref(null)
 const trendChart = ref(null)
 
 // 加载状态
@@ -87,7 +165,16 @@ const deleting = ref(false)
 const analyticsData = ref({
   status_distribution: [],
   owner_distribution: [],
-  monthly_trend: []
+  team_distribution: [],
+  monthly_trend: [],
+  summary: {
+    total_projects: 0,
+    completed_projects: 0,
+    completion_rate: 0,
+    overdue_projects: 0,
+    active_projects: 0,
+    avg_duration_days: 0
+  }
 })
 
 // 权限检查
@@ -117,6 +204,7 @@ async function loadAnalyticsData() {
 function updateCharts() {
   updateStatusChart()
   updateOwnerChart()
+  updateTeamChart()
   updateTrendChart()
 }
 
@@ -170,6 +258,36 @@ function updateOwnerChart() {
         label: '项目数量',
         data: analyticsData.value.owner_distribution.map(item => item.count),
         backgroundColor: '#2196f3'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  })
+}
+
+function updateTeamChart() {
+  if (!teamChart.value) return
+
+  const ctx = teamChart.value.getContext('2d')
+  if (window.teamChartInstance) {
+    window.teamChartInstance.destroy()
+  }
+
+  window.teamChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: analyticsData.value.team_distribution.map(item => item.team),
+      datasets: [{
+        label: '项目数量',
+        data: analyticsData.value.team_distribution.map(item => item.count),
+        backgroundColor: '#9c27b0'
       }]
     },
     options: {

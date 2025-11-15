@@ -46,8 +46,8 @@ async def lifespan(app: FastAPI):
     
     async with engine.begin() as conn:
         # 要重新创建表，请取消注释下面的代码：
-        # print("删除全部数据库表...")
-        # await conn.run_sync(Base.metadata.drop_all)
+        print("删除全部数据库表...")
+        await conn.run_sync(Base.metadata.drop_all)
 
         print("创建全部数据库表...")
         await conn.run_sync(Base.metadata.create_all)

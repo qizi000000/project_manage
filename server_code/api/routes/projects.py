@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, delete
+from sqlalchemy import select, or_, delete, func
+from sqlalchemy.orm import selectinload
 from datetime import date, timedelta, datetime
 import json
 import os
@@ -11,7 +12,7 @@ import uuid
 import shutil
 
 from db.session import get_session
-from db.models.project import Project, ProjectAttachment, ProjectComment, ProjectTimeline, ProjectMember
+from db.models.project import Project, ProjectAttachment, ProjectComment, ProjectTimeline, ProjectMember, ProjectMilestone
 from db.models.user import User
 from db.models.role import Role
 from db.models.user_role import UserRole
@@ -29,6 +30,9 @@ from schemas.project import (
     CommentCreate,
     TimelineItem,
     MemberOut,
+    MilestoneCreate,
+    MilestoneUpdate,
+    MilestoneOut,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -401,15 +405,36 @@ async def list_attachments(project_id: int, session: AsyncSession = Depends(get_
     return result
 
 
-@router.get("/{project_id}/comments", response_model=list[CommentOut], dependencies=[Depends(require_permissions("projects.view"))])
-async def list_comments(project_id: int, session: AsyncSession = Depends(get_session)):
-    q = await session.execute(
-        select(ProjectComment).where(ProjectComment.project_id == project_id).order_by(ProjectComment.created_at.desc())
+@router.get("/{project_id}/comments", response_model=dict, dependencies=[Depends(require_permissions("projects.view"))])
+async def list_comments(
+    project_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    session: AsyncSession = Depends(get_session)
+):
+    """获取项目评论列表"""
+    # 验证项目存在
+    project_res = await session.execute(select(Project).where(Project.id == project_id))
+    if not project_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    # 获取评论总数
+    count_res = await session.execute(
+        select(func.count(ProjectComment.id)).where(ProjectComment.project_id == project_id)
     )
-    comments = q.scalars().all()
-    
+    total = count_res.scalar()
+
+    # 获取评论列表
+    comments_res = await session.execute(
+        select(ProjectComment).where(ProjectComment.project_id == project_id)
+        .order_by(ProjectComment.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    comments = comments_res.scalars().all()
+
     # 填充用户信息
-    result = []
+    comment_list = []
     for c in comments:
         # 先解析 mentioned_users
         mentioned_list = []
@@ -418,19 +443,19 @@ async def list_comments(project_id: int, session: AsyncSession = Depends(get_ses
                 mentioned_list = json.loads(c.mentioned_users)
             except:
                 mentioned_list = []
-        
+
         # 创建字典
         comment_data = {
             'id': c.id,
             'user_id': c.user_id,
             'content': c.content,
             'mentioned_users': mentioned_list,
-            'created_at': c.created_at,
+            'created_at': c.created_at.isoformat() if c.created_at else None,
             'user_nickname': None,
             'user_username': None,
             'user_role_name': None
         }
-        
+
         # 获取评论者信息
         if c.user_id:
             user_q = await session.execute(select(User).where(User.id == c.user_id))
@@ -438,17 +463,22 @@ async def list_comments(project_id: int, session: AsyncSession = Depends(get_ses
             if user:
                 comment_data['user_nickname'] = user.nickname
                 comment_data['user_username'] = user.username
-                
+
                 # 获取角色名称
                 if user.role_id:
                     role_q = await session.execute(select(Role).where(Role.id == user.role_id))
                     role = role_q.scalar_one_or_none()
                     if role:
                         comment_data['user_role_name'] = role.name
-        
-        result.append(CommentOut(**comment_data))
-    
-    return result
+
+        comment_list.append(comment_data)
+
+    return {
+        "items": comment_list,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
 
 
 @router.post("/{project_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
@@ -603,6 +633,16 @@ async def update_comment(
     
     await session.commit()
     await session.refresh(comment)
+    
+    # 创建@提及通知
+    if payload.mentioned_user_ids:
+        await NotificationService.create_mention_notifications(
+            session=session,
+            mentioned_user_ids=payload.mentioned_user_ids,
+            mentioner=current_user,
+            project_id=comment.project_id,
+            comment_content=payload.content
+        )
     
     # 返回时填充用户信息
     comment_dict = {
@@ -781,47 +821,170 @@ async def list_project_members(project_id: int, session: AsyncSession = Depends(
     
     result = []
     
-    # 获取通过ProjectMember记录的成员（比如项目负责人）
-    explicit_members_q = await session.execute(
-        select(ProjectMember, User, Role).join(
-            User, ProjectMember.user_id == User.id
-        ).outerjoin(
-            Role, User.role_id == Role.id
-        ).where(ProjectMember.project_id == project_id)
-    )
+    # 获取所有相关用户的ID
+    user_ids = set()
     
-    for member, user, role in explicit_members_q:
+    # 获取通过ProjectMember记录的成员
+    explicit_members_q = await session.execute(
+        select(ProjectMember.user_id).where(ProjectMember.project_id == project_id)
+    )
+    explicit_user_ids = [row[0] for row in explicit_members_q]
+    user_ids.update(explicit_user_ids)
+    
+    # 获取通过团队关系的成员
+    if project.team_id:
+        team_members_q = await session.execute(
+            select(TeamMember.user_id).where(TeamMember.team_id == project.team_id)
+        )
+        team_user_ids = [row[0] for row in team_members_q]
+        user_ids.update(team_user_ids)
+    
+    # 为每个用户获取详细信息和角色
+    for user_id in user_ids:
+        user_q = await session.execute(select(User).where(User.id == user_id))
+        user = user_q.scalar_one_or_none()
+        if not user:
+            continue
+            
+        # 获取用户的所有角色
+        role_names = []
+        
+        # 获取用户主角色（通过user.role_id）
+        if user.role_id:
+            main_role_q = await session.execute(select(Role).where(Role.id == user.role_id))
+            main_role = main_role_q.scalar_one_or_none()
+            if main_role:
+                role_names.append(main_role.name)
+        
+        # 获取用户额外角色（通过UserRole表）
+        user_roles_q = await session.execute(
+            select(Role).join(UserRole, UserRole.role_id == Role.id).where(UserRole.user_id == user_id)
+        )
+        extra_roles = user_roles_q.scalars().all()
+        for role in extra_roles:
+            if role.name not in role_names:  # 避免重复
+                role_names.append(role.name)
+        
+        # 检查是否是项目负责人
+        is_leader = False
+        if user_id in explicit_user_ids:
+            leader_q = await session.execute(
+                select(ProjectMember).where(
+                    ProjectMember.project_id == project_id,
+                    ProjectMember.user_id == user_id,
+                    ProjectMember.role == "负责人"
+                )
+            )
+            is_leader = leader_q.scalar_one_or_none() is not None
+        
+        # 获取加入时间
+        joined_at = None
+        if user_id in explicit_user_ids:
+            member_q = await session.execute(
+                select(ProjectMember).where(
+                    ProjectMember.project_id == project_id,
+                    ProjectMember.user_id == user_id
+                )
+            )
+            member = member_q.scalar_one_or_none()
+            joined_at = member.joined_at if member else None
+        elif project.team_id:
+            team_member_q = await session.execute(
+                select(TeamMember).where(
+                    TeamMember.team_id == project.team_id,
+                    TeamMember.user_id == user_id
+                )
+            )
+            team_member = team_member_q.scalar_one_or_none()
+            joined_at = team_member.created_at if team_member else None
+        
         result.append({
             "id": user.id,
             "username": user.username,
             "nickname": user.nickname,
             "email": None,  # User model doesn't have email field
-            "role": member.role or (role.name if role else None),
-            "joined_at": member.joined_at
+            "roles": role_names,  # 多个角色
+            "joined_at": joined_at,
+            "online": user.online,
+            "is_leader": is_leader  # 是否是项目负责人
         })
     
-    # 获取通过团队关系的成员
-    if project.team_id:
-        team_members_q = await session.execute(
-            select(TeamMember, User, Role).join(
-                User, TeamMember.user_id == User.id
-            ).outerjoin(
-                Role, User.role_id == Role.id
-            ).where(TeamMember.team_id == project.team_id)
-        )
-        
-        # 避免重复添加已经在explicit_members中的用户
-        existing_user_ids = {member["id"] for member in result}
-        
-        for team_member, user, role in team_members_q:
-            if user.id not in existing_user_ids:
-                result.append({
-                    "id": user.id,
-                    "username": user.username,
-                    "nickname": user.nickname,
-                    "email": None,  # User model doesn't have email field
-                    "role": role.name if role else None,
-                    "joined_at": team_member.created_at
-                })
-    
     return result
+
+
+# 里程碑相关路由
+@router.get("/{project_id}/milestones", response_model=list[MilestoneOut], dependencies=[Depends(require_permissions("projects.view"))])
+async def list_milestones(project_id: int, session: AsyncSession = Depends(get_session)):
+    """获取项目里程碑列表"""
+    q = await session.execute(
+        select(ProjectMilestone)
+        .where(ProjectMilestone.project_id == project_id)
+        .options(selectinload(ProjectMilestone.creator))
+        .order_by(ProjectMilestone.created_at.desc())
+    )
+    return q.scalars().all()
+
+
+@router.post("/{project_id}/milestones", response_model=MilestoneOut, dependencies=[Depends(require_permissions("projects.update"))])
+async def create_milestone(project_id: int, payload: MilestoneCreate, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    """创建项目里程碑"""
+    # 验证项目存在
+    project_q = await session.execute(select(Project).where(Project.id == project_id))
+    project = project_q.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    
+    milestone = ProjectMilestone(
+        project_id=project_id,
+        created_by=current_user.id,
+        title=payload.title,
+        description=payload.description,
+        due_date=payload.due_date,
+        status=payload.status,
+    )
+    session.add(milestone)
+    await session.commit()
+    await session.refresh(milestone)
+    return milestone
+
+
+@router.put("/milestones/{milestone_id}", response_model=MilestoneOut, dependencies=[Depends(require_permissions("projects.update"))])
+async def update_milestone(milestone_id: int, payload: MilestoneUpdate, session: AsyncSession = Depends(get_session)):
+    """更新项目里程碑"""
+    q = await session.execute(select(ProjectMilestone).where(ProjectMilestone.id == milestone_id))
+    milestone = q.scalar_one_or_none()
+    if not milestone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="里程碑不存在")
+    
+    # 更新字段
+    if payload.title is not None:
+        milestone.title = payload.title
+    if payload.description is not None:
+        milestone.description = payload.description
+    if payload.due_date is not None:
+        milestone.due_date = payload.due_date
+    if payload.status is not None:
+        milestone.status = payload.status
+        # 如果状态改为完成，设置完成时间
+        if payload.status == "completed" and milestone.completed_at is None:
+            milestone.completed_at = datetime.utcnow()
+        elif payload.status != "completed":
+            milestone.completed_at = None
+    
+    milestone.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(milestone)
+    return milestone
+
+
+@router.delete("/milestones/{milestone_id}", dependencies=[Depends(require_permissions("projects.update"))])
+async def delete_milestone(milestone_id: int, session: AsyncSession = Depends(get_session)):
+    """删除项目里程碑"""
+    q = await session.execute(select(ProjectMilestone).where(ProjectMilestone.id == milestone_id))
+    milestone = q.scalar_one_or_none()
+    if not milestone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="里程碑不存在")
+    
+    await session.delete(milestone)
+    await session.commit()
+    return {"message": "里程碑删除成功"}

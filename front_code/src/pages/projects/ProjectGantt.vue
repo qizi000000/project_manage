@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="gantt-page">
     <div class="row items-center q-mb-md">
       <div class="text-h6">项目甘特图</div>
       <q-space />
@@ -76,7 +76,7 @@ function buildScale(minDate, maxDate){
 function computeRange(tasksList){
   let min = null, max = null
   for(const t of tasksList){
-    const start = t.created_at || t.start_date || new Date().toISOString()
+    const start = t.start_date || t.created_at || new Date().toISOString()
     const end = t.due_date || (t.estimated_days ? new Date(new Date(start).getTime()+t.estimated_days*24*3600*1000).toISOString() : start)
     if(!min || new Date(start) < new Date(min)) min = start
     if(!max || new Date(end) > new Date(max)) max = end
@@ -144,6 +144,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.gantt-page {
+  min-height: auto !important;
+}
+
 .gantt-wrapper{ overflow:auto }
 .gantt-grid{ min-width:800px }
 .gantt-row{ display:flex; align-items:center; height:40px; border-bottom:1px solid #eee }

@@ -15,8 +15,6 @@ const routes = [
       { path: '', name: 'home', component: () => import('pages/IndexPage.vue') },
       // 项目管理
       { path: 'projects', name: 'projects-list', component: () => import('pages/projects/ProjectsList.vue'), meta: { permissions: ['projects.view'] } },
-      //文件管理
-      { path: 'projects/files', name: 'projects-files', component: () => import('pages/projects/ProjectFiles.vue'), meta: { permissions: ['projects.view'] } },
       
       // 甘特图
       { path: 'projects/gantt', name: 'projects-gantt', component: () => import('pages/projects/ProjectGantt.vue'), meta: { permissions: ['projects.view'] } },
@@ -32,7 +30,7 @@ const routes = [
           { path: '', redirect: { name: 'project-details' } },
           { path: 'details', name: 'project-details', component: () => import('pages/projects/ProjectDetails.vue'), meta: { permissions: ['projects.view'] } },
           { path: 'gantt', name: 'project-gantt', component: () => import('pages/projects/ProjectGantt.vue'), meta: { permissions: ['projects.view'] } },
-          { path: 'files', name: 'project-files', component: () => import('pages/projects/ProjectFiles.vue'), meta: { permissions: ['projects.view'] } },
+          { path: 'milestones', name: 'project-milestones', component: () => import('pages/projects/ProjectMilestones.vue'), meta: { permissions: ['projects.view'] } },
         ],
       },
   // 团队管理

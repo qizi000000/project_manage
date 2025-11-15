@@ -54,6 +54,14 @@ function connectWS(router){
         const msg = JSON.parse(ev.data)
         if (msg.type === 'pong') return
         
+        if (msg.type === 'user_status_change') {
+          // 处理用户状态变化
+          const { useUserStore } = await import('../stores/user')
+          const userStore = useUserStore()
+          userStore.setUserOnline(msg.user_id, msg.online)
+          return
+        }
+        
         if (msg.type === 'notification') {
           // 处理实时通知
           const { useNotificationStore } = await import('../stores/notification')

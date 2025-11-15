@@ -24,6 +24,7 @@ class TaskOut(BaseModel):
     created_by_name: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    start_date: Optional[datetime] = None  # 任务开始日期
     estimated_days: Optional[int] = None
     due_date: Optional[datetime] = None  # 自动计算得出
 
@@ -35,6 +36,7 @@ class TaskCreate(BaseModel):
     priority: str = "中"
     assignee_ids: List[int] = []  # 多个负责人ID列表
     project_id: int
+    start_date: Optional[datetime] = None  # 任务开始日期
     estimated_days: Optional[int] = None
 
 # 任务列表响应
@@ -49,6 +51,7 @@ class TaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     assignee_ids: Optional[List[int]] = None  # 多个负责人ID列表
+    start_date: Optional[datetime] = None  # 任务开始日期
     estimated_days: Optional[int] = None
 
 # 任务查询参数

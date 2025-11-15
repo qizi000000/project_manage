@@ -77,6 +77,17 @@
                 />
               </div>
               
+              <div class="col-12 col-md-4">
+                <q-input
+                  v-model="taskForm.start_date"
+                  type="date"
+                  label="开始日期"
+                  outlined
+                  dense
+                  :rules="[v => !v || new Date(v) >= new Date().setHours(0,0,0,0) || '开始日期不能早于今天']"
+                />
+              </div>
+              
               <div class="col-12">
                 <div class="text-caption q-mb-sm">任务描述</div>
                 <q-editor 
@@ -365,6 +376,17 @@
                 />
               </div>
               
+              <div class="col-12 col-md-4">
+                <q-input
+                  v-model="editForm.start_date"
+                  type="date"
+                  label="开始日期"
+                  outlined
+                  dense
+                  :rules="[v => !v || new Date(v) >= new Date().setHours(0,0,0,0) || '开始日期不能早于今天']"
+                />
+              </div>
+              
               <div class="col-12">
                 <div class="text-caption q-mb-sm">任务描述</div>
                 <q-editor 
@@ -460,6 +482,7 @@ const taskForm = ref({
   priority: '中',
   project_id: null,
   assignee_ids: [],
+  start_date: null,
   estimated_days: null
 })
 
@@ -470,6 +493,7 @@ const editForm = ref({
   priority: '中',
   project_id: null,
   assignee_ids: [],
+  start_date: null,
   estimated_days: null
 })
 

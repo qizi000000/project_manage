@@ -52,10 +52,71 @@ async def get_projects_analytics(
     )
     owner_data = [{"owner": row[0], "count": row[1]} for row in owner_query.all()]
 
+    # 项目团队分布
+    team_query = await session.execute(
+        select(
+            Team.name,
+            func.count(Project.id)
+        ).join(Project.team).group_by(Team.id, Team.name).order_by(func.count(Project.id).desc())
+    )
+    team_data = [{"team": row[0], "count": row[1]} for row in team_query.all()]
+
+    # 项目完成率统计
+    total_projects_query = await session.execute(select(func.count(Project.id)))
+    total_projects = total_projects_query.scalar()
+
+    completed_projects_query = await session.execute(
+        select(func.count(Project.id)).where(Project.status == "已完成")
+    )
+    completed_projects = completed_projects_query.scalar()
+
+    completion_rate = round((completed_projects / total_projects * 100), 2) if total_projects > 0 else 0
+
+    # 逾期项目统计
+    overdue_projects_query = await session.execute(
+        select(func.count(Project.id)).where(
+            Project.end_date < datetime.now().date(),
+            Project.status != "已完成"
+        )
+    )
+    overdue_projects = overdue_projects_query.scalar()
+
+    # 最近30天活跃项目（有任务更新的项目）
+    thirty_days_ago = datetime.now() - timedelta(days=30)
+    active_projects_query = await session.execute(
+        select(func.count(func.distinct(Task.project_id))).join(Task.project).where(
+            Task.updated_at >= thirty_days_ago
+        )
+    )
+    active_projects = active_projects_query.scalar() or 0
+
+    # 项目平均工期（已完成项目的平均天数）
+    avg_duration_query = await session.execute(
+        select(
+            func.avg(
+                func.datediff(Project.end_date, Project.start_date)
+            )
+        ).where(
+            Project.status == "已完成",
+            Project.start_date.isnot(None),
+            Project.end_date.isnot(None)
+        )
+    )
+    avg_duration = round(avg_duration_query.scalar() or 0, 1)
+
     return {
         "status_distribution": status_data,
         "monthly_trend": monthly_data,
-        "owner_distribution": owner_data
+        "owner_distribution": owner_data,
+        "team_distribution": team_data,
+        "summary": {
+            "total_projects": total_projects,
+            "completed_projects": completed_projects,
+            "completion_rate": completion_rate,
+            "overdue_projects": overdue_projects,
+            "active_projects": active_projects,
+            "avg_duration_days": avg_duration
+        }
     }
 
 
@@ -82,19 +143,45 @@ async def get_tasks_analytics(
     twelve_weeks_ago = datetime.now() - timedelta(weeks=12)
     weekly_completion_query = await session.execute(
         select(
-            func.date_trunc('week', Task.updated_at).label('week'),
+            func.date_format(Task.updated_at, '%Y-%m-%d').label('week'),
             func.count(Task.id)
         ).where(
             Task.status == "已完成",
             Task.updated_at >= twelve_weeks_ago
-        ).group_by(func.date_trunc('week', Task.updated_at)).order_by(func.date_trunc('week', Task.updated_at))
+        ).group_by(func.date_format(Task.updated_at, '%Y-%m-%d')).order_by(func.date_format(Task.updated_at, '%Y-%m-%d'))
     )
-    weekly_data = [{"week": row[0].isoformat(), "count": row[1]} for row in weekly_completion_query.all()]
+    weekly_data = [{"week": row[0], "count": row[1]} for row in weekly_completion_query.all()]
+
+    # 任务统计汇总
+    total_tasks_query = await session.execute(select(func.count(Task.id)))
+    total_tasks = total_tasks_query.scalar()
+
+    completed_tasks_query = await session.execute(
+        select(func.count(Task.id)).where(Task.status == "已完成")
+    )
+    completed_tasks = completed_tasks_query.scalar()
+
+    completion_rate = round((completed_tasks / total_tasks * 100), 2) if total_tasks > 0 else 0
+
+    # 逾期任务统计
+    overdue_tasks_query = await session.execute(
+        select(func.count(Task.id)).where(
+            Task.due_date < datetime.now().date(),
+            Task.status != "已完成"
+        )
+    )
+    overdue_tasks = overdue_tasks_query.scalar()
 
     return {
         "status_distribution": status_data,
         "priority_distribution": priority_data,
-        "weekly_completion_trend": weekly_data
+        "weekly_completion_trend": weekly_data,
+        "summary": {
+            "total_tasks": total_tasks,
+            "completed_tasks": completed_tasks,
+            "overdue_tasks": overdue_tasks,
+            "completion_rate": completion_rate
+        }
     }
 
 
@@ -107,7 +194,7 @@ async def get_users_analytics(
 
     # 用户角色分布
     role_query = await session.execute(
-        select(Role.name, func.count(User.id)).join(User.role).group_by(Role.id, Role.name)
+        select(Role.name, func.count(User.id)).join(User, Role.id == User.role_id).group_by(Role.id, Role.name)
     )
     role_data = [{"role": row[0], "count": row[1]} for row in role_query.all()]
 
@@ -150,11 +237,12 @@ async def get_teams_analytics(
     """获取团队分析数据"""
 
     # 团队成员数量分布
+    from db.models.team import TeamMember
     team_members_query = await session.execute(
         select(
             Team.name,
-            func.count(User.id)
-        ).join(Team.members).group_by(Team.id, Team.name).order_by(func.count(User.id).desc())
+            func.count(TeamMember.id)
+        ).join(TeamMember, Team.id == TeamMember.team_id).group_by(Team.id, Team.name).order_by(func.count(TeamMember.id).desc())
     )
     team_members_data = [{"team": row[0], "member_count": row[1]} for row in team_members_query.all()]
 
@@ -163,7 +251,7 @@ async def get_teams_analytics(
         select(
             Team.name,
             func.count(Project.id)
-        ).join(Team.projects).group_by(Team.id, Team.name).order_by(func.count(Project.id).desc())
+        ).join(Project, Team.id == Project.team_id).group_by(Team.id, Team.name).order_by(func.count(Project.id).desc())
     )
     team_projects_data = [{"team": row[0], "project_count": row[1]} for row in team_projects_query.all()]
 
@@ -181,11 +269,12 @@ async def get_roles_analytics(
     """获取角色分析数据"""
 
     # 角色权限数量分布
+    from db.models.permission import RolePermission
     role_permissions_query = await session.execute(
         select(
             Role.name,
-            func.count().label('permission_count')
-        ).join(Role.permissions).group_by(Role.id, Role.name).order_by(func.count().desc())
+            func.count(RolePermission.id).label('permission_count')
+        ).join(RolePermission, Role.id == RolePermission.role_id).group_by(Role.id, Role.name).order_by(func.count(RolePermission.id).desc())
     )
     role_permissions_data = [{"role": row[0], "permission_count": row[1]} for row in role_permissions_query.all()]
 
@@ -194,7 +283,7 @@ async def get_roles_analytics(
         select(
             Role.name,
             func.count(User.id)
-        ).join(Role.users).group_by(Role.id, Role.name).order_by(func.count(User.id).desc())
+        ).join(User, Role.id == User.role_id).group_by(Role.id, Role.name).order_by(func.count(User.id).desc())
     )
     role_users_data = [{"role": row[0], "user_count": row[1]} for row in role_users_query.all()]
 

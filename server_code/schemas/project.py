@@ -1,8 +1,9 @@
 """项目相关 Pydantic 模式。"""
 
 from datetime import date, datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
+from schemas.user import UserOut
 
 
 class ProjectCreate(BaseModel):
@@ -97,8 +98,40 @@ class MemberOut(BaseModel):
     username: str
     nickname: str | None = None
     email: str | None = None
-    role: str | None = None
+    roles: List[str] = []  # 多个角色
     joined_at: datetime | None = None
+    online: bool = False
+    is_leader: bool = False  # 是否是项目负责人
+
+    class Config:
+        from_attributes = True
+
+
+# 里程碑相关schema
+class MilestoneCreate(BaseModel):
+    title: str = Field(..., max_length=100)  # 限制标题长度为100字符
+    description: str | None = None
+    due_date: date | None = None
+    status: str = "pending"
+
+
+class MilestoneUpdate(BaseModel):
+    title: str | None = Field(None, max_length=100)  # 限制标题长度为100字符
+    description: str | None = None
+    due_date: date | None = None
+    status: str | None = None
+
+
+class MilestoneOut(BaseModel):
+    id: int
+    title: str
+    description: str | None = None
+    due_date: date | None = None
+    completed_at: datetime | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    creator: UserOut  # 创建人信息
 
     class Config:
         from_attributes = True

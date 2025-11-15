@@ -168,10 +168,8 @@ const menus = [
     permissions: ['projects.view'],
     children: [
       { label: '项目列表', icon: 'list', path: '/projects', permissions: ['projects.view'] },
-      { label: '项目文件', icon: 'attach_file', path: '/projects/files', permissions: ['projects.view'] },
       { label: '项目甘特图', icon: 'timeline', path: '/projects/gantt', permissions: ['projects.view'] },
       { label: '项目里程碑', icon: 'flag', path: '/projects/milestones', permissions: ['projects.view'] },
-      { label: '项目统计', icon: 'insert_chart', path: '/projects/analytics', permissions: ['projects.view'] },
     ],
   },
   {

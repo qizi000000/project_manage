@@ -23,6 +23,14 @@ class ConnectionManager:
     # 获取用户连接
     def get(self, user_id: int) -> WebSocket | None:
         return self.active.get(user_id)
+    # 广播消息给所有连接的用户
+    async def broadcast(self, message: dict):
+        for connection in self.active.values():
+            try:
+                await connection.send_json(message)
+            except Exception:
+                # 忽略发送失败的连接
+                pass
 
 manager = ConnectionManager()
 
@@ -57,6 +65,13 @@ async def ws_endpoint(websocket: WebSocket, session: AsyncSession = Depends(get_
     await session.commit()
 
     await manager.connect(user_id, websocket)
+    
+    # 广播用户上线消息
+    await manager.broadcast({
+        "type": "user_status_change",
+        "user_id": user_id,
+        "online": True
+    })
 
     try:
         while True:
@@ -77,3 +92,10 @@ async def ws_endpoint(websocket: WebSocket, session: AsyncSession = Depends(get_
         if user:
             user.online = False
             await session.commit()
+        
+        # 广播用户下线消息
+        await manager.broadcast({
+            "type": "user_status_change",
+            "user_id": user_id,
+            "online": False
+        })

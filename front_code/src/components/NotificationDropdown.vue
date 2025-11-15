@@ -210,7 +210,7 @@ function handleNotificationClick(notification) {
   } else if (notification.related_type === 'task') {
     router.push(`/tasks/${notification.related_id}`)
   } else if (notification.related_type === 'team') {
-    router.push(`/teams/${notification.related_id}`)
+    router.push(`/teams/members?teamId=${notification.related_id}`)
   }
 }
 </script>

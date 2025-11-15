@@ -60,6 +60,9 @@ class Project(Base):
     timeline: Mapped[list[ProjectTimeline]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    milestones: Mapped[list[ProjectMilestone]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 # 项目成员关联模型
 class ProjectMember(Base):
@@ -111,3 +114,24 @@ class ProjectTimeline(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     project: Mapped[Project] = relationship(back_populates="timeline")
+
+
+class ProjectMilestone(Base):
+    """项目里程碑模型"""
+    __tablename__ = "project_milestones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 创建人
+    title: Mapped[str] = mapped_column(String(100))  # 限制标题长度为100字符
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    due_date: Mapped[date | None] = mapped_column(Date, default=None)  # 计划完成日期
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)  # 实际完成时间
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending, completed, overdue
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    project: Mapped[Project] = relationship(back_populates="milestones")
+    creator: Mapped[User] = relationship("User", foreign_keys=[created_by])
